@@ -22,34 +22,38 @@ this_year as (
   from actor_films
   where year = 1970
   group by actorid, year
+),
+cum_data as (
+  select
+    coalesce(ly.actorid, ty.actorid) as actorid,
+    coalesce(ly.films, array[]::film[]) || ty.films as films,
+    case
+      when ty.avg_rating is not null then
+      (
+        case
+          when ty.avg_rating > 8 then 'star'
+          when ty.avg_rating > 7 then 'good'
+          when ty.avg_rating > 6 then 'average'
+          else 'bad'
+        end
+      )::quality_class
+      else ly.quality_class
+    end as quality_class,
+    ty.year is not null as is_active,
+    1970 as current_year
+  from last_year ly
+  full outer join this_year ty
+  on ly.actorid = ty.actorid
 )
 INSERT INTO actors
-select
-  coalesce(ly.actorid, ty.actorid) as actorid,
-  coalesce(ly.films, array[]::film[]) || ty.films as films,
-  case
-    when ty.avg_rating is not null then
-    (
-      case
-        when ty.avg_rating > 8 then 'star'
-        when ty.avg_rating > 7 then 'good'
-        when ty.avg_rating > 6 then 'average'
-        else 'bad'
-      end
-    )::quality_class
-    else ly.quality_class
-  end as quality_class,
-  ty.year is not null as is_active,
-  1970 as current_year
-from last_year ly
-full outer join this_year ty
-on ly.actorid = ty.actorid
+select * from cum_data
 ON CONFLICT (actorid, current_year)
 DO UPDATE SET
   films = EXCLUDED.films,
   quality_class = EXCLUDED.quality_class,
   is_active = EXCLUDED.is_active;
 
+-- select * from cum_data;
 -- actorid  |films                                                                          |quality_class|is_active|current_year|
 -- ---------+-------------------------------------------------------------------------------+-------------+---------+------------+
 -- nm0000003|{"(The Bear and the Doll,431,6.4,tt0064779)","(Les novices,219,5.1,tt0066164)"}|bad          |true     |        1970|
