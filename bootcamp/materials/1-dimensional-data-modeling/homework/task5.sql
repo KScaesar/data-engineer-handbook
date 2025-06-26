@@ -1,15 +1,18 @@
 -- Incremental Update
 
-WITH
-last_scd AS ( -- Get the most recent SCD records
-  SELECT *
-  FROM actors_history_scd
-  WHERE snapshot_date = 1973 AND end_date = 9999
+WITH consts AS (
+  SELECT 1974 AS load_year
+),
+last_active_scd AS ( -- Get the most recent SCD records
+  SELECT scd.*
+  FROM actors_history_scd scd
+  WHERE scd.end_date = 9999
 ),
 this_year AS ( -- Get current year actors data
   SELECT *
   FROM actors
-  WHERE current_year = 1974
+  JOIN consts c ON TRUE
+  WHERE actors.current_year = c.load_year
 ),
 unchanged_records AS ( -- Records where status did not change, just update the end_date and snapshot_date
   select
@@ -21,7 +24,7 @@ unchanged_records AS ( -- Records where status did not change, just update the e
     t.quality_class,
     t.is_active
   FROM this_year t
-  JOIN last_scd l
+  JOIN last_active_scd l
     ON t.actorid = l.actorid
   WHERE t.quality_class = l.quality_class
     AND t.is_active = l.is_active
@@ -41,7 +44,7 @@ changed_records AS ( -- Records where status changed, split into before and afte
     t.quality_class AS after_quality_class,
     t.is_active AS after_is_active
   FROM this_year t
-  JOIN last_scd l
+  JOIN last_active_scd l
     ON t.actorid = l.actorid
   WHERE t.quality_class <> l.quality_class
      OR t.is_active <> l.is_active
@@ -77,7 +80,7 @@ new_records AS ( -- Records for actors who did not appear in last year's SCD
     t.quality_class,
     t.is_active
   FROM this_year t
-  LEFT JOIN last_scd l
+  LEFT JOIN last_active_scd l
     ON t.actorid = l.actorid
   WHERE l.actorid IS NULL
 ),
@@ -149,3 +152,19 @@ DO UPDATE SET
 -- historical    |nm0000008|      1971|    1971|         1972|bad          |true     |
 -- historical    |nm0000008|      1972|    1972|         1973|star         |true     |
 -- unchanged     |nm0000008|      1973|    9999|         1974|star         |false    |
+
+-- Data integrity validation
+WITH validation_check AS (
+    SELECT
+        actorid,
+        COUNT(*) as total_records,
+        COUNT(CASE WHEN end_date = 9999 THEN 1 END) as active_records
+    FROM actors_history_scd
+    GROUP BY actorid
+    HAVING COUNT(CASE WHEN end_date = 9999 THEN 1 END) > 1
+)
+SELECT
+    actorid,
+    active_records as multiple_active_records
+FROM validation_check
+ORDER BY actorid;
