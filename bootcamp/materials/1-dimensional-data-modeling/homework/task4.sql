@@ -1,7 +1,10 @@
 -- Full Update
 -- https://chatgpt.com/share/685a19f7-c7ac-800d-a942-75ca99d13f75
 
-WITH with_prev AS (
+WITH consts AS (
+  SELECT 1974 AS load_year
+),
+with_prev AS (
   SELECT
     actorid,
     current_year,
@@ -9,8 +12,10 @@ WITH with_prev AS (
     is_active,
     LAG(quality_class, 1) OVER (PARTITION BY actorid ORDER BY current_year) AS prev_quality,
     LAG(is_active, 1) OVER (PARTITION BY actorid ORDER BY current_year) AS prev_active,
-    MAX(current_year) OVER () AS snapshot_year
-  FROM actors where current_year <= 1974
+    c.load_year AS snapshot_year
+  FROM actors
+  JOIN consts c ON TRUE
+  WHERE actors.current_year <= c.load_year
 ),
 with_change AS (
   SELECT *,
